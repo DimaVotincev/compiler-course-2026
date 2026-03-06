@@ -1,18 +1,6 @@
 
 // RUN: %clang_cc1 -load %llvmshlibdir/VotincevDAnalyzer_Votincev_D_FIIT3_ClangAST%pluginext -plugin votincev_d_analyzerplugin -fsyntax-only %s 2>&1 | FileCheck %s
 
-// CHECK: FunctionDecl {{0x[0-9a-fA-F]+}} <{{.*}}> col:20 isEven 'bool (int) noexcept'
-// CHECK-NEXT: |-ParmVarDecl {{0x[0-9a-fA-F]+}} <col:27, col:31> col:31 used value 'int'
-// CHECK-NEXT: |-CompoundStmt {{0x[0-9a-fA-F]+}} <col:47, col:72>
-// CHECK-NEXT: | `-ReturnStmt {{0x[0-9a-fA-F]+}} <col:49, col:69>
-// CHECK-NEXT: |   `-BinaryOperator {{0x[0-9a-fA-F]+}} <col:56, col:69> 'bool' '=='
-// CHECK-NEXT: |     |-BinaryOperator {{0x[0-9a-fA-F]+}} <col:56, col:64> 'int' '%'
-// CHECK-NEXT: |     | |-ImplicitCastExpr {{0x[0-9a-fA-F]+}} <col:56> 'int' <LValueToRValue>
-// CHECK-NEXT: |     | | `-DeclRefExpr {{0x[0-9a-fA-F]+}} <col:56> 'int' lvalue ParmVar {{0x[0-9a-fA-F]+}} 'value' 'int'
-// CHECK-NEXT: |     | `-IntegerLiteral {{0x[0-9a-fA-F]+}} <col:64> 'int' 2
-// CHECK-NEXT: |     `-IntegerLiteral {{0x[0-9a-fA-F]+}} <col:69> 'int' 0
-// CHECK-NEXT: `-WarnUnusedResultAttr {{0x[0-9a-fA-F]+}} <col:3> nodiscard ""
-
 
 // запускается clang для ЭТОГО файла
 
@@ -44,8 +32,22 @@ extern "C" {
 }
 
 
-[[nodiscard]] bool isEven(int value) noexcept { 
-    int n = 10;
+int n = 10;
+
+
+
+// global scope
+
+// non leak
+int* global_mem1 = (int*) malloc(n*sizeof(int));
+
+// leak
+int* global_mem_leak1 = (int*) malloc(n*sizeof(int));
+
+
+
+[[nodiscard]] bool test1(int value) noexcept { 
+    
 
     // leaks:
     int* mem_leak1 = (int*) malloc(n*sizeof(int));
@@ -58,10 +60,71 @@ extern "C" {
     void* mem3 = fopen("test.cpp","r");
 
 
+    // non leak
+    {
+        double* mem4;
+        mem4 = (double*) malloc(n*sizeof(double));
+        delete mem4;
+    }
+
+    // leak
+    {
+        double* mem_leak4;
+        mem_leak4 = (double*) malloc(n*sizeof(double));
+    }
+
+    // non leak
+    {
+        {
+            char* mem5;
+            mem5 = (char*) malloc(n*sizeof(char));
+            delete mem5;
+        }
+    }
+
+    // leak
+    {
+        {
+            char* mem_leak5;
+            mem_leak5 = (char*) malloc(n*sizeof(char));
+        }
+    }
+
+
+
     free(mem1);
     delete[] mem2;
     fclose(mem3);
+    delete global_mem1;
 
 
+
+
+    
+
+    // leaks:
+    int* mem_leak6 = (int*) malloc(n*sizeof(int));
+
+    // non leaks:
+    int* mem6 = (int*) malloc(n*sizeof(int));
+
+    // condition leak
+    if(value < 5) {
+        delete[] mem6;
+        return false;
+        // CHECK: warning: Ресурс для переменной 'global_mem_leak1' может быть не освобожден (не гарантированное освобождение при return)!
+        // CHECK: warning: Ресурс для переменной 'mem_leak1' может быть не освобожден (не гарантированное освобождение при return)!
+        // CHECK: warning: Ресурс для переменной 'mem_leak2' может быть не освобожден (не гарантированное освобождение при return)!
+        // CHECK: warning: Ресурс для переменной 'mem_leak3' может быть не освобожден (не гарантированное освобождение при return)!
+        // CHECK: warning: Ресурс для переменной 'mem_leak4' может быть не освобожден (не гарантированное освобождение при return)!
+        // CHECK: warning: Ресурс для переменной 'mem_leak5' может быть не освобожден (не гарантированное освобождение при return)!
+        // CHECK: warning: Ресурс для переменной 'mem_leak6' может быть не освобожден (не гарантированное освобождение при return)!
+    }
+
+    // если бы не было разветвления - warning появились бы у return ниже
+
+
+    delete[] mem6;
     return false;
 }
+

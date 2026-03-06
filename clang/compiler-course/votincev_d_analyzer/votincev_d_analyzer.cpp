@@ -18,9 +18,11 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include <vector>
+#include <set>
 
 // работа плагина:
 // Action (создает) -> Consumer(запускает) -> Visitor(анализирует)
+
 
 namespace {
 
@@ -30,24 +32,48 @@ class VotincevDVisitor final : public clang::RecursiveASTVisitor<VotincevDVisito
 public:
   explicit VotincevDVisitor(clang::ASTContext *context) : m_context(context) {}
 
-
-  // вызывается автоматически для каждого объявления функци в коде
-  // все подобные функции работы с классами: Visit+ИмяКлассаУзла
-  // bool VisitFunctionDecl(clang::FunctionDecl *func) {
-
-  //   // dump() - метод который печатает структуру узла stderr в текстовом виде
-  //   // (например дерево с BinaryOperator и тд)
-  //   func->dump();
-
-  //   // return true == продолжить обход дерева
-  //   // если вернуть false == обход прервется
-  //   return true;
-  // }
+  // вызывается автоматически для каждого объявления функции в коде
+  bool VisitFunctionDecl(clang::FunctionDecl *func) {
+    // если у функции есть тело - очищаем списки,
+    // чтобы анализировать каждую функцию независимо внутри TU
+    if (func->hasBody()) {
+      // m_allocatedVars.clear();
+      //m_deallocatedVars.clear();
+      //m_reportedVars.clear(); // очищаем набор уже отправленных варнингов
+    }
+    return true;
+  }
 
 
 
+  // вызывается, когда компилятор встречает return
+  // позволяет найти ресурсы, которые не гарантированно освобождаются при выходе
+  bool VisitReturnStmt(clang::ReturnStmt *ret) {
+    for (auto* allocVar : m_allocatedVars) {
+      bool found = false;
+      for (auto* deallocVar : m_deallocatedVars) {
+        if (allocVar == deallocVar) {
+          found = true;
+          break;
+        }
+      }
 
-
+      // если на момент return переменная не в списке освобожденных
+      // и мы о ней еще не сообщали
+      if (!found && m_reportedVars.find(allocVar) == m_reportedVars.end()) {
+        clang::DiagnosticsEngine& DE = m_context->getDiagnostics();
+        unsigned diagID = DE.getCustomDiagID(
+            clang::DiagnosticsEngine::Warning, 
+            "Ресурс для переменной '%0' может быть не освобожден (не гарантированное освобождение при return)!"
+        );
+        DE.Report(ret->getReturnLoc(), diagID) << allocVar->getNameAsString();
+        
+        // запоминаем, что на эту переменную варнинг уже был
+        m_reportedVars.insert(allocVar);
+      }
+    }
+    return true;
+  }
 
   // вызывается, когда компилятор видит вызов функции 
   // в моем случае внутри определяется: это free/fclose?
@@ -66,190 +92,123 @@ public:
       clang::Expr* arg = call->getArg(0)->IgnoreParenCasts();
 
       // то, что в скобках - это ссылка на переменную?
-      clang::DeclRefExpr* ref = clang::dyn_cast<clang::DeclRefExpr>(arg);
-      // если это ссылка
-      if (ref) {
-
-        // достаем само объявление из ссылки
-        clang::VarDecl* var = clang::dyn_cast<clang::VarDecl>(ref->getDecl());
-        if (var) {
-          llvm::errs() << "Освобождение (" << funcName << "): " << var->getNameAsString() << "\n";
-          m_deallocatedVars.push_back(var);
-        }
+      clang::VarDecl* var = getVarDeclFromExpr(arg);
+      
+      // если нашли переменную
+      if (var) {
+        // llvm::errs() << "Освобождение (" << funcName << "): " << var->getNameAsString() << "\n";
+        m_deallocatedVars.push_back(var);
       }
     }
     
     return true;
   }
 
-  // вызывается когда компилятор видит new
+  // вызывается когда компилятор видит delete
   bool VisitCXXDeleteExpr(clang::CXXDeleteExpr *del) {
     // достаем аргумент (то, что после слова delete)
     clang::Expr* arg = del->getArgument()->IgnoreParenCasts();
 
-    // проверяем, ссылка ли это
-    clang::DeclRefExpr* ref = clang::dyn_cast<clang::DeclRefExpr>(arg);
+    // является ли ссылкой на переменную
+    clang::VarDecl* var = getVarDeclFromExpr(arg);
 
-    // если это ссылка
-    if (ref) {
-        // является ли ссылкой на переменную
-        clang::VarDecl* var = clang::dyn_cast<clang::VarDecl>(ref->getDecl());
+    // если ссылка на переменную
+    if (var) {
+        // llvm::errs() << "Освобождение (delete): " << var->getNameAsString() << "\n";
+        m_deallocatedVars.push_back(var);
+    }
+    return true;
+  }
 
-        // если ссылка на переменную
-        if (var) {
-            llvm::errs() << "Освобождение (delete): " << var->getNameAsString() << "\n";
-            m_deallocatedVars.push_back(var);
+  // вызывается когда компилятор видит объявление новой переменной
+  bool VisitVarDecl(clang::VarDecl* var) { 
+    clang::Expr* init = var->getInit();
+    if (init && isAllocation(init)) {
+        // Проверка на уникальность, чтобы не дублировать глобальные/локальные
+        if (std::find(m_allocatedVars.begin(), m_allocatedVars.end(), var) == m_allocatedVars.end()) {
+            // llvm::errs() << "Нашел выделение (Decl): " << var->getNameAsString() << "\n";
+            m_allocatedVars.push_back(var);
         }
     }
     return true;
-}
-
-
-
-  // переменные в Clang представлены как класс VarDecl
-  // поэтому чтобы их ловить: VisitVarDecl
-  // bool VisitVarDecl(clang::VarDecl* var) { // !!!!!!!!!!!!!!!!!!!!!!!! пример !!!!!!!!!!!!!
-  //   // llvm::errs() << "Я нашел переменную: " << var->getNameAsString() << "\n";
-
-  //   return true;
-
-  //   // получаю тип объявленной переменной
-  //   clang::QualType var_type = var->getType();
-
-  //   // если переменная не глобальная или не int - не идем дальше
-  //   if(!var->getDeclContext()->isTranslationUnit() ||
-  //       !var_type->isSpecificBuiltinType(clang::BuiltinType::Int)) {
-  //     return true;
-  //   }
-
-
-  //   // получаю движок, чтобы зарегистрировать ID своего warning'a
-  //   clang::DiagnosticsEngine& DE = m_context->getDiagnostics();
-
-  //   // получаю ID моего варнинга
-  //   // 1: тип (Warning, Error, ....)
-  //   // 2: что будет выведено 
-  //   // (%* - это куда будет вставляться текст с помощью << при вызове Report)
-  //   unsigned my_warn_id = DE.getCustomDiagID(clang::DiagnosticsEngine::Warning,
-  //   "Global 'int' variable Declaration: %0");
-
-  //   // кидаем Warning
-  //   // 1: позиция переменной
-  //   // 2: ID варна
-  //   DE.Report(var->getLocation(),my_warn_id) << var->getNameAsString();
-  //   return true;
-
-
-  //   // у каждой переменной есть метод getType()
-  //   // он возвращает объект QualType - умная обертка над типом
-  //   // чтобы проверить, являетстя ли переменная родным типом int 
-  //   // нужно использовать метод isSpecificBuiltinType(clang::BuiltinType::Int)
-
-  //   /*
-  //   Проверка, что переменная - глобальная
-  //   if (var->hasGlobalStorage()) {
-  //   // Это глобальная переменная (или static переменная)
-  //   }
-
-  //   // Или более строгий вариант (проверка, что родитель — это сам файл):
-  //   if (var->getDeclContext()->isTranslationUnit()) {
-  //       // Это точно глобальная переменная верхнего уровня
-  //   }
-    
-  //   */
-  // }
-  
-
-
-
-
-
-
-  // вызывается когда компилятор видит объявление новой переменной
-  bool VisitVarDecl(clang::VarDecl* var) { // !!!!!!!!!!!!!!!!!!!!!!!! пример !!!!!!!!!!!!!
-    
-    // беру правую часть (определение) переменной var
-    clang::Expr* init = var->getInit();
-
-    // если правой части нет - значит и нет malloc/new/fopen
-    if (init == nullptr) {
-      return true;
-    }
-
-
-    // выражения (в том числе malloc/new/fopen) могут быть в скобках
-    // IgnoreParenImpCasts эти скобки игнорирует 
-    // и отдает только само выражение
-    clang::Expr* coreExpr = init->IgnoreParenCasts();
-
-    // пытаюсь преврать выражение в вызов функции
-    // (является ли coreExpr вызовом функции)
-    clang::CallExpr* call = clang::dyn_cast<clang::CallExpr>(coreExpr);
-
-    // если coreExpr - вызов функции
-    if(call) {
-
-      // получаем функцию, которая вызывается
-      clang::FunctionDecl *func = call->getDirectCallee();
-
-      // проверяем, что это не какой-нибудь странный вызов по указателю
-      if (func) {
-
-        
-        // получаю имя функции
-        llvm::StringRef funcName = func->getName();
-
-        // если функция - malloc или fopen
-          if (funcName == "malloc" || funcName == "fopen") {
-            llvm::errs() << "Нашел malloc/fopen: " << var->getNameAsString() << "\n";
-            // то для нашей переменной var вызывается malloc
-            // переменную сохраняем
-            m_allocatedVars.push_back(var);
-          }
-      }
-    }
-    // но new - это не функция, поэтому он отдельно обрабатывается
-
-    clang::CXXNewExpr* is_new = clang::dyn_cast<clang::CXXNewExpr>(coreExpr);
-
-    if(is_new) {
-      llvm::errs() << "Нашел выделение (new): " << var->getNameAsString() << "\n";
-      m_allocatedVars.push_back(var);
-    }
-
-    return true;
   } 
 
-
-
-
-    void checkLeaks() {
-      for (auto* allocVar : m_allocatedVars) {
-          bool found = false;
-          for (auto* deallocVar : m_deallocatedVars) {
-              if (allocVar == deallocVar) {
-                  found = true;
-                  break;
-              }
-          }
-
-          if (!found) {
-              // Вот она, утечка!
-              clang::DiagnosticsEngine& DE = m_context->getDiagnostics();
-              unsigned diagID = DE.getCustomDiagID(
-                  clang::DiagnosticsEngine::Warning, 
-                  "Память или ресурс для переменной '%0' не освобождены!"
-              );
-              DE.Report(allocVar->getLocation(), diagID) << allocVar->getNameAsString();
-          }
-      }
+  // вызывается когда компилятор видит оператор присваивания (a = ...)
+  bool VisitBinaryOperator(clang::BinaryOperator *op) {
+    if (op->isAssignmentOp() && isAllocation(op->getRHS())) {
+        clang::VarDecl* var = getVarDeclFromExpr(op->getLHS());
+        if (var) {
+            if (std::find(m_allocatedVars.begin(), m_allocatedVars.end(), var) == m_allocatedVars.end()) {
+                // llvm::errs() << "Нашел выделение (Assign): " << var->getNameAsString() << "\n";
+                m_allocatedVars.push_back(var);
+            }
+        }
     }
+    return true;
+  }
+
+  // функция для сравнения списков и вывода предупреждений
+  void checkLeaks() {
+    for (auto* allocVar : m_allocatedVars) {
+        // если мы уже ругались на эту переменную в VisitReturnStmt — пропускаем
+        if (m_reportedVars.count(allocVar)) continue;
+
+        bool found = false;
+        for (auto* deallocVar : m_deallocatedVars) {
+            if (allocVar == deallocVar) {
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            clang::DiagnosticsEngine& DE = m_context->getDiagnostics();
+            unsigned diagID = DE.getCustomDiagID(
+                clang::DiagnosticsEngine::Warning, 
+                "Память или ресурс для переменной '%0' не освобождены!"
+            );
+            DE.Report(allocVar->getLocation(), diagID) << allocVar->getNameAsString();
+        }
+    }
+  }
 
 
 private:
+  // вспомогательная функция: проверяет, является ли выражение выделением
+  bool isAllocation(clang::Expr* e) {
+    if (!e) return false;
+    clang::Expr* coreExpr = e->IgnoreParenCasts();
+
+    // проверка на вызов функции (malloc/fopen)
+    if (clang::CallExpr* call = clang::dyn_cast<clang::CallExpr>(coreExpr)) {
+        if (clang::FunctionDecl *func = call->getDirectCallee()) {
+            llvm::StringRef funcName = func->getName();
+            return (funcName == "malloc" || funcName == "fopen");
+        }
+    }
+
+    // проверка на оператор new
+    if (clang::isa<clang::CXXNewExpr>(coreExpr)) {
+        return true;
+    }
+
+    return false;
+  }
+
+  // вспомогательная функция: достает VarDecl из любого выражения (ссылки)
+  clang::VarDecl* getVarDeclFromExpr(clang::Expr* e) {
+    if (!e) return nullptr;
+    clang::Expr* coreExpr = e->IgnoreParenCasts();
+    if (clang::DeclRefExpr* ref = clang::dyn_cast<clang::DeclRefExpr>(coreExpr)) {
+        return clang::dyn_cast<clang::VarDecl>(ref->getDecl());
+    }
+    return nullptr;
+  }
+
   clang::ASTContext *m_context;
   std::vector<clang::VarDecl*> m_allocatedVars;
   std::vector<clang::VarDecl*> m_deallocatedVars;
+  std::set<clang::VarDecl*> m_reportedVars; // набор переменных, о которых уже выдано предупреждение
 };
 
 
@@ -258,12 +217,8 @@ class VotincevDConsumer final : public clang::ASTConsumer {
 public:
   explicit VotincevDConsumer(clang::ASTContext *context) : m_visitor(context) {}
 
-
-
-
   // вызывается 1 раз когда весь TU полностью разобран в AST
   void HandleTranslationUnit(clang::ASTContext &context) override {
-    
     // берем корень дерева (TranslationUnitDecl)
     // и запускаме нашего Visitor m_visitor гулять по узлам
     m_visitor.TraverseDecl(context.getTranslationUnitDecl());
@@ -281,24 +236,18 @@ private:
 class ExampleAction final : public clang::PluginASTAction {
 public:
   std::unique_ptr<clang::ASTConsumer>
-
   // метод создания экземпляра нашего Consumer
   CreateASTConsumer(clang::CompilerInstance &ci, llvm::StringRef) override {
-
-    // ci.getASTContext() - передает информацию о типах 
-    // и других деталях компиляции
     return std::make_unique<VotincevDConsumer>(&ci.getASTContext());
   }
 
   // позволяет плагину принимать аргументы из командной строки
   bool ParseArgs(const clang::CompilerInstance &ci,
-                 const std::vector<std::string> &args) override {
-    // но здесь просто возвращаем true и ничего не делаем
+                  const std::vector<std::string> &args) override {
     return true;
   }
 };
 } // namespace
-
 
 // регистрация плагина (чтобы его видел Clang)
 static clang::FrontendPluginRegistry::Add<ExampleAction>
