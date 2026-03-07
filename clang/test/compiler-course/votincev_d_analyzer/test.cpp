@@ -1,5 +1,5 @@
 
-// RUN: %clang_cc1 -load %llvmshlibdir/VotincevDAnalyzer_Votincev_D_FIIT3_ClangAST%pluginext -plugin votincev_d_analyzerplugin -fsyntax-only %s 2>&1 | FileCheck %s
+// RUN: %clang_cc1 -load %llvmshlibdir/votincev_d_analyzer_ClangAST%pluginext -plugin votincev_d_analyzerplugin -fsyntax-only %s 2>&1 | FileCheck %s
 
 
 // запускается clang для ЭТОГО файла
@@ -12,7 +12,7 @@
 /*
 
 /mnt/d/CompilersRepo/compiler-course-2026/build/bin/clang -cc1 \
--load /mnt/d/CompilersRepo/compiler-course-2026/build/lib/VotincevDAnalyzer_Votincev_D_FIIT3_ClangAST.so \
+-load /mnt/d/CompilersRepo/compiler-course-2026/build/lib/votincev_d_analyzer_ClangAST.so \
 -plugin votincev_d_analyzerplugin \
 -fsyntax-only \
 /mnt/d/CompilersRepo/compiler-course-2026/clang/test/compiler-course/votincev_d_analyzer/test.cpp
