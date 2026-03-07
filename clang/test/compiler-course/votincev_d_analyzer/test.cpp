@@ -1,7 +1,6 @@
 
 // RUN: %clang_cc1 -load %llvmshlibdir/votincev_d_analyzer_ClangAST%pluginext -plugin votincev_d_analyzerplugin -fsyntax-only %s 2>&1 | FileCheck %s
 
-
 // этот код преобразуется в AST
 // его мы проверяем комментариями + пометка чек
 // если все совпало == тест отработал верно
@@ -115,3 +114,28 @@ int* global_mem_leak1 = (int*) malloc(n*sizeof(int));
     return false;
 }
 
+
+
+[[nodiscard]] bool test2(int value) noexcept { 
+    
+
+    // leaks:
+    int* mem_leak1 = (int*) malloc(n*sizeof(int));
+    // CHECK: warning: Память или ресурс для переменной 'mem_leak1' не освобождены!
+
+    int* mem_leak2 = new int[n];
+    // CHECK: warning: Память или ресурс для переменной 'mem_leak2' не освобождены!
+
+    void* mem_leak3 = fopen("test.cpp","r");
+    // CHECK: warning: Память или ресурс для переменной 'mem_leak3' не освобождены!
+
+    // non leaks:
+    int* mem1 = (int*) malloc(n*sizeof(int));
+    int* mem2 = new int[n];
+    void* mem3 = fopen("test.cpp","r");
+
+    free(mem1);
+    delete[] mem2;
+    fclose(mem3);
+
+}
