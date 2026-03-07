@@ -2,23 +2,10 @@
 // RUN: %clang_cc1 -load %llvmshlibdir/votincev_d_analyzer_ClangAST%pluginext -plugin votincev_d_analyzerplugin -fsyntax-only %s 2>&1 | FileCheck %s
 
 
-// запускается clang для ЭТОГО файла
-
 // этот код преобразуется в AST
 // его мы проверяем комментариями + пометка чек
 // если все совпало == тест отработал верно
 
-// чтобы получить чеки, нужно запустить команду:
-/*
-
-/mnt/d/CompilersRepo/compiler-course-2026/build/bin/clang -cc1 \
--load /mnt/d/CompilersRepo/compiler-course-2026/build/lib/votincev_d_analyzer_ClangAST.so \
--plugin votincev_d_analyzerplugin \
--fsyntax-only \
-/mnt/d/CompilersRepo/compiler-course-2026/clang/test/compiler-course/votincev_d_analyzer/test.cpp
-
-*/
-// после - в консоли появляется дерево AST для данного файла
 
 // ниже пишется код, который тестируется с помощью clang
 
