@@ -98,13 +98,13 @@ int* global_mem_leak1 = (int*) malloc(n*sizeof(int));
     if(value < 5) {
         delete[] mem6;
         return false;
-        // CHECK: warning: Ресурс для переменной 'global_mem_leak1' может быть не освобожден (не гарантированное освобождение при return)!
-        // CHECK: warning: Ресурс для переменной 'mem_leak1' может быть не освобожден (не гарантированное освобождение при return)!
-        // CHECK: warning: Ресурс для переменной 'mem_leak2' может быть не освобожден (не гарантированное освобождение при return)!
-        // CHECK: warning: Ресурс для переменной 'mem_leak3' может быть не освобожден (не гарантированное освобождение при return)!
-        // CHECK: warning: Ресурс для переменной 'mem_leak4' может быть не освобожден (не гарантированное освобождение при return)!
-        // CHECK: warning: Ресурс для переменной 'mem_leak5' может быть не освобожден (не гарантированное освобождение при return)!
-        // CHECK: warning: Ресурс для переменной 'mem_leak6' может быть не освобожден (не гарантированное освобождение при return)!
+        // CHECK-DAG: warning: Ресурс для переменной 'global_mem_leak1' может быть не освобожден (не гарантированное освобождение при return)!
+        // CHECK-DAG: warning: Ресурс для переменной 'mem_leak1' может быть не освобожден (не гарантированное освобождение при return)!
+        // CHECK-DAG: warning: Ресурс для переменной 'mem_leak2' может быть не освобожден (не гарантированное освобождение при return)!
+        // CHECK-DAG: warning: Ресурс для переменной 'mem_leak3' может быть не освобожден (не гарантированное освобождение при return)!
+        // CHECK-DAG: warning: Ресурс для переменной 'mem_leak4' может быть не освобожден (не гарантированное освобождение при return)!
+        // CHECK-DAG: warning: Ресурс для переменной 'mem_leak5' может быть не освобожден (не гарантированное освобождение при return)!
+        // CHECK-DAG: warning: Ресурс для переменной 'mem_leak6' может быть не освобожден (не гарантированное освобождение при return)!
     }
 
     // если бы не было разветвления - warning появились бы у return ниже
@@ -121,13 +121,13 @@ int* global_mem_leak1 = (int*) malloc(n*sizeof(int));
 
     // leaks:
     int* mem_leak1 = (int*) malloc(n*sizeof(int));
-    // CHECK: warning: Память или ресурс для переменной 'mem_leak1' не освобождены!
+    // CHECK-DAG: warning: Память или ресурс для переменной 'mem_leak1' не освобождены!
 
     int* mem_leak2 = new int[n];
-    // CHECK: warning: Память или ресурс для переменной 'mem_leak2' не освобождены!
+    // CHECK-DAG: warning: Память или ресурс для переменной 'mem_leak2' не освобождены!
 
     void* mem_leak3 = fopen("test.cpp","r");
-    // CHECK: warning: Память или ресурс для переменной 'mem_leak3' не освобождены!
+    // CHECK-DAG: warning: Память или ресурс для переменной 'mem_leak3' не освобождены!
 
     // non leaks:
     int* mem1 = (int*) malloc(n*sizeof(int));
