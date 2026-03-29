@@ -22,12 +22,14 @@ struct VotincedDFremPass : llvm::PassInfoMixin<VotincedDFremPass> {
             auto *rhs = binOp->getOperand(1);
             llvm::IRBuilder<> builder(binOp);
 
-            auto *op1 =
-                builder.CreateFDiv(lhs, rhs); // a/b 
-            op1 = builder.CreateUnaryIntrinsic(llvm::Intrinsic::trunc,
-                                               op1); // округление a/b
-            auto *op2 = builder.CreateFMul(op1, rhs); // (a/b) * b
-            auto *fremOp = builder.CreateFSub(lhs, op2); // a - ( (a/b)*b )
+            // a/b
+            auto *op1 = builder.CreateFDiv(lhs, rhs);
+            // округление a/b
+            op1 = builder.CreateUnaryIntrinsic(llvm::Intrinsic::trunc, op1);
+            // (a/b) * b
+            auto *op2 = builder.CreateFMul(op1, rhs);
+            // a - ( (a/b)*b )
+            auto *fremOp = builder.CreateFSub(lhs, op2);
 
             binOp->replaceAllUsesWith(fremOp);
             binOp->eraseFromParent();
@@ -39,10 +41,12 @@ struct VotincedDFremPass : llvm::PassInfoMixin<VotincedDFremPass> {
             auto *rhs = binOp->getOperand(1);
             llvm::IRBuilder<> builder(binOp);
 
-            auto *op1 = builder.CreateUDiv(
-                lhs, rhs); // a/b 
-            auto *op2 = builder.CreateMul(op1, rhs); // (a/b) * b
-            auto *uremOp = builder.CreateSub(lhs, op2); // a - ( (a/b)*b )
+            // a/b
+            auto *op1 = builder.CreateUDiv(lhs, rhs);
+            // (a/b) * b
+            auto *op2 = builder.CreateMul(op1, rhs);
+            // a - ( (a/b)*b )
+            auto *uremOp = builder.CreateSub(lhs, op2);
 
             binOp->replaceAllUsesWith(uremOp);
             binOp->eraseFromParent();
@@ -53,10 +57,12 @@ struct VotincedDFremPass : llvm::PassInfoMixin<VotincedDFremPass> {
             auto *rhs = binOp->getOperand(1);
             llvm::IRBuilder<> builder(binOp);
 
-            auto *op1 = builder.CreateSDiv(
-                lhs, rhs); // a/b
-            auto *op2 = builder.CreateMul(op1, rhs); // (a/b) * b
-            auto *sremOp = builder.CreateSub(lhs, op2); // a - ( (a/b)*b )
+            // a/b
+            auto *op1 = builder.CreateSDiv(lhs, rhs);
+            // (a/b) * b
+            auto *op2 = builder.CreateMul(op1, rhs);
+            // a - ( (a/b)*b )
+            auto *sremOp = builder.CreateSub(lhs, op2);
 
             binOp->replaceAllUsesWith(sremOp);
             binOp->eraseFromParent();
