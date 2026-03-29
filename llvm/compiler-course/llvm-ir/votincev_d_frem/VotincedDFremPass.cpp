@@ -64,7 +64,7 @@ struct VotincedDFremPass : llvm::PassInfoMixin<VotincedDFremPass> {
           }
         }
       }
-    }
+    } // bb
 
     return changed ? llvm::PreservedAnalyses::none()
                    : llvm::PreservedAnalyses::all();
