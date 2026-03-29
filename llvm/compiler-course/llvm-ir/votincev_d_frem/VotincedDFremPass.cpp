@@ -55,7 +55,7 @@ struct VotincedDFremPass : llvm::PassInfoMixin<VotincedDFremPass> {
 
             auto *op1 = builder.CreateSDiv(
                 lhs, rhs); // a/b (обычное целочисленное деление fp)
-            auto *op2 = builder.CreateMul(op1, rhs);    // (a/b) * b
+            auto *op2 = builder.CreateMul(op1, rhs); // (a/b) * b
             auto *sremOp = builder.CreateSub(lhs, op2); // a - ( (a/b)*b )
 
             binOp->replaceAllUsesWith(sremOp);
