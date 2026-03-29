@@ -23,7 +23,7 @@ struct VotincedDFremPass : llvm::PassInfoMixin<VotincedDFremPass> {
             llvm::IRBuilder<> builder(binOp);
 
             auto *op1 =
-                builder.CreateFDiv(lhs, rhs); // a/b (обычное деление fp)
+                builder.CreateFDiv(lhs, rhs); // a/b 
             op1 = builder.CreateUnaryIntrinsic(llvm::Intrinsic::trunc,
                                                op1); // округление a/b
             auto *op2 = builder.CreateFMul(op1, rhs); // (a/b) * b
@@ -40,8 +40,8 @@ struct VotincedDFremPass : llvm::PassInfoMixin<VotincedDFremPass> {
             llvm::IRBuilder<> builder(binOp);
 
             auto *op1 = builder.CreateUDiv(
-                lhs, rhs); // a/b (обычное целочисленное деление fp)
-            auto *op2 = builder.CreateMul(op1, rhs);    // (a/b) * b
+                lhs, rhs); // a/b 
+            auto *op2 = builder.CreateMul(op1, rhs); // (a/b) * b
             auto *uremOp = builder.CreateSub(lhs, op2); // a - ( (a/b)*b )
 
             binOp->replaceAllUsesWith(uremOp);
@@ -54,7 +54,7 @@ struct VotincedDFremPass : llvm::PassInfoMixin<VotincedDFremPass> {
             llvm::IRBuilder<> builder(binOp);
 
             auto *op1 = builder.CreateSDiv(
-                lhs, rhs); // a/b (обычное целочисленное деление fp)
+                lhs, rhs); // a/b
             auto *op2 = builder.CreateMul(op1, rhs); // (a/b) * b
             auto *sremOp = builder.CreateSub(lhs, op2); // a - ( (a/b)*b )
 
