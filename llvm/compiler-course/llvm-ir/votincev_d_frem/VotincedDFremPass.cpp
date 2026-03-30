@@ -17,7 +17,6 @@ struct VotincedDFremPass : llvm::PassInfoMixin<VotincedDFremPass> {
         if (auto *binOp = llvm::dyn_cast<llvm::BinaryOperator>(&instr)) {
 
           if (binOp->getOpcode() == llvm::Instruction::FRem) {
-            binOp->dump();
             auto *lhs = binOp->getOperand(0);
             auto *rhs = binOp->getOperand(1);
             llvm::IRBuilder<> builder(binOp);
@@ -36,7 +35,6 @@ struct VotincedDFremPass : llvm::PassInfoMixin<VotincedDFremPass> {
             changed = true;
 
           } else if (binOp->getOpcode() == llvm::Instruction::URem) {
-            binOp->dump();
             auto *lhs = binOp->getOperand(0);
             auto *rhs = binOp->getOperand(1);
             llvm::IRBuilder<> builder(binOp);
@@ -52,7 +50,6 @@ struct VotincedDFremPass : llvm::PassInfoMixin<VotincedDFremPass> {
             binOp->eraseFromParent();
             changed = true;
           } else if (binOp->getOpcode() == llvm::Instruction::SRem) {
-            binOp->dump();
             auto *lhs = binOp->getOperand(0);
             auto *rhs = binOp->getOperand(1);
             llvm::IRBuilder<> builder(binOp);
