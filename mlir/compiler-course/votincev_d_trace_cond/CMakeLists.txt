@@ -11,7 +11,7 @@ add_llvm_pass_plugin(${TARGET_NAME}
     BUILDTREE_ONLY
 )
 
-# Подключаем библиотеки для работы с нужными диалектами
+
 target_link_libraries(${TARGET_NAME}
     PRIVATE
     MLIRFuncDialect       # для func::CallOp, func::FuncOp

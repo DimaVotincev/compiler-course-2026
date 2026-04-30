@@ -25,7 +25,7 @@ public:
     MLIRContext *ctx = moduleOp.getContext();
     OpBuilder builder(ctx);
 
-    // Вспомогательная функция для генерации объявлений функций трассировки
+    // функция для генерации объявлений функций трассировки
     auto ensureFuncDeclared = [&](StringRef name) {
       if (!moduleOp.lookupSymbol<func::FuncOp>(name)) {
         builder.setInsertionPointToStart(moduleOp.getBody());
@@ -40,25 +40,25 @@ public:
     ensureFuncDeclared("trace_condition_else_begin");
     ensureFuncDeclared("trace_condition_else_end");
 
-    // Функция для вставки call-операций в начало и конец блока
+    // для вставки call-операций в начало и конец блока
     auto insertCalls = [&](Block &block, StringRef beginName,
                            StringRef endName) {
       if (block.empty())
         return;
 
-      // Вставка в начало блока
+      // вставка в начало блока
       builder.setInsertionPointToStart(&block);
       builder.create<func::CallOp>(builder.getUnknownLoc(), beginName,
                                    TypeRange{});
 
-      // Вставка в конец блока (перед yield/return)
+      // вставка в конец блока (перед yield/return)
       Operation &terminator = block.back();
       builder.setInsertionPoint(&terminator);
       builder.create<func::CallOp>(builder.getUnknownLoc(), endName,
                                    TypeRange{});
     };
 
-    // Обход всех операций
+    // обход всех операций
     moduleOp.walk([&](Operation *op) {
       if (auto scfIf = dyn_cast<scf::IfOp>(op)) {
         insertCalls(*scfIf.thenBlock(), "trace_condition_then_begin",
