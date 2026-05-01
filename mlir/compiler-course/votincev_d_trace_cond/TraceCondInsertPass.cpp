@@ -46,12 +46,10 @@ public:
       if (block.empty())
         return;
 
-      // вставка в начало блока
       builder.setInsertionPointToStart(&block);
       builder.create<func::CallOp>(builder.getUnknownLoc(), beginName,
                                    TypeRange{});
 
-      // вставка в конец блока (перед yield/return)
       Operation &terminator = block.back();
       builder.setInsertionPoint(&terminator);
       builder.create<func::CallOp>(builder.getUnknownLoc(), endName,
